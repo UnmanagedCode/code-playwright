@@ -135,6 +135,14 @@ function sanitizeForName(s) {
 // `cd` around inside it — we anchor on the worktree root, not raw cwd), but
 // distinct across separate runners (separate worktrees/checkouts), so
 // concurrent runners no longer collide on a shared literal 'default'.
+//
+// IMPORTANT: this harness is consumed by other projects via relative import
+// (`../../termux-playwright-harness/browser.mjs`), so the walk MUST start
+// from `process.cwd()` — the invoking runner's directory — and never from
+// this file's own location (`import.meta.url` / `__dirname`). Anchoring on
+// the harness's own file path would collapse every consumer back onto one
+// shared name, reintroducing the exact collision this function exists to
+// prevent.
 export function defaultSessionName() {
   const root = findWorktreeRoot(process.cwd()) ?? process.cwd();
   const base = sanitizeForName(path.basename(root)) || 'session';
