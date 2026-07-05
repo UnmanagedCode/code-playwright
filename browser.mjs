@@ -12,6 +12,7 @@
 import { chromium } from 'playwright-core';
 import { existsSync, promises as fsp } from 'node:fs';
 import { spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -111,15 +112,52 @@ export const SESSION_DIR = path.join(
   os.homedir(), '.cache', 'termux-playwright-harness',
 );
 
-export function sessionMetaPath(name = 'default') {
+// Walk up from `startDir` looking for `.git` — a directory for a normal
+// repo, a file for a worktree checkout (like this one). Used to anchor the
+// auto-derived session name to the workspace a runner owns, not whatever
+// subdirectory it happens to be in for a given turn.
+function findWorktreeRoot(startDir) {
+  let dir = path.resolve(startDir);
+  while (true) {
+    if (existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function sanitizeForName(s) {
+  return s.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 40);
+}
+
+// Default session name when neither --session nor PW_SESSION is given.
+// Stable across every turn issued from the same runner/worktree (turns can
+// `cd` around inside it — we anchor on the worktree root, not raw cwd), but
+// distinct across separate runners (separate worktrees/checkouts), so
+// concurrent runners no longer collide on a shared literal 'default'.
+export function defaultSessionName() {
+  const root = findWorktreeRoot(process.cwd()) ?? process.cwd();
+  const base = sanitizeForName(path.basename(root)) || 'session';
+  const hash = crypto.createHash('sha1').update(root).digest('hex').slice(0, 8);
+  return `auto-${base}-${hash}`;
+}
+
+// Single source of truth for session-name precedence: explicit arg (e.g.
+// --session) > PW_SESSION env > auto-derived default. Both the CLI and
+// programmatic callers should resolve through this so they can't drift.
+export function resolveSessionName(explicit) {
+  return explicit ?? process.env.PW_SESSION ?? defaultSessionName();
+}
+
+export function sessionMetaPath(name = resolveSessionName()) {
   return path.join(SESSION_DIR, `session-${name}.json`);
 }
 
-export function sessionLogPath(name = 'default') {
+export function sessionLogPath(name = resolveSessionName()) {
   return path.join(SESSION_DIR, `session-${name}.log`);
 }
 
-export async function readSessionMeta(name = 'default') {
+export async function readSessionMeta(name = resolveSessionName()) {
   try {
     return JSON.parse(await fsp.readFile(sessionMetaPath(name), 'utf8'));
   } catch (e) {
@@ -136,7 +174,7 @@ export function isPidAlive(pid) {
 
 // If the metadata file exists but the daemon PID is gone, remove the stale
 // file. Returns true if it cleared something.
-export async function clearStaleSessionMeta(name = 'default') {
+export async function clearStaleSessionMeta(name = resolveSessionName()) {
   const meta = await readSessionMeta(name);
   if (meta && !isPidAlive(meta.pid)) {
     await fsp.unlink(sessionMetaPath(name)).catch(() => {});
@@ -152,7 +190,7 @@ export async function clearStaleSessionMeta(name = 'default') {
 // The caller (the daemon) is responsible for keeping the child alive
 // (parking) and tearing it down on SIGTERM.
 export async function startSession({
-  name = 'default',
+  name = resolveSessionName(),
   headless = true,
   executablePath = DEFAULT_BIN,
   extraArgs = [],
@@ -205,7 +243,7 @@ export async function startSession({
 
 // Read the session metadata and open a CDP connection to the running
 // chromium. Returns a Playwright Browser handle and the metadata.
-export async function connectSession({ name = 'default' } = {}) {
+export async function connectSession({ name = resolveSessionName() } = {}) {
   const meta = await readSessionMeta(name);
   if (!meta) {
     throw new Error(
@@ -225,7 +263,7 @@ export async function connectSession({ name = 'default' } = {}) {
 // Per-turn primitive: connect, pick the active context+page (the first
 // of each — create if absent), run `fn`, then disconnect (which on CDP
 // just detaches the client — chromium and its pages stay alive).
-export async function withActivePage(fn, { name = 'default' } = {}) {
+export async function withActivePage(fn, { name = resolveSessionName() } = {}) {
   const { browser, meta } = await connectSession({ name });
   try {
     let context = browser.contexts()[0];

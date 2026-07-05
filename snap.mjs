@@ -3,7 +3,7 @@
 // a PNG.
 //
 //   node snap.mjs <url> [outputPath]
-//   node snap.mjs http://127.0.0.1:8787              # → screenshots/<timestamp>.png
+//   node snap.mjs http://127.0.0.1:8787              # → screenshots/<timestamp>-<rand>.png
 //   node snap.mjs http://127.0.0.1:8787 home.png     # → home.png
 //
 // For "boot a server + snap + tear down" workflows, write a small consumer
@@ -18,6 +18,7 @@
 
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { withPage, waitForServer } from './browser.mjs';
 
 const args = process.argv.slice(2);
@@ -36,9 +37,15 @@ const viewport = (() => {
   return { width: +m[1], height: +m[2] };
 })();
 
+// Random suffix (not just the ms-resolution timestamp) so two concurrent
+// `snap.mjs` invocations writing to the same default `screenshots/` dir
+// can't collide.
 const outPath = outArg
   ? path.resolve(outArg)
-  : path.resolve('screenshots', `${new Date().toISOString().replace(/[:.]/g, '-')}.png`);
+  : path.resolve(
+      'screenshots',
+      `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(3).toString('hex')}.png`,
+    );
 
 await mkdir(path.dirname(outPath), { recursive: true });
 
