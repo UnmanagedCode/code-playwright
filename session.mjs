@@ -20,7 +20,12 @@
 // browser-side JS. The return value is JSON-printed to stdout.
 //
 // Session metadata lives at ~/.cache/termux-playwright-harness/session-<name>.json.
-// Default session name is 'default'; override with --session or PW_SESSION env.
+// Session name resolution (see resolveSessionName in browser.mjs):
+//   --session NAME  >  PW_SESSION env  >  auto-derived from the enclosing
+//   git worktree/repo root (falls back to cwd outside a repo).
+// The auto-derived name is stable across turns from the same runner/worktree
+// but distinct across separate runners, so concurrent runners that don't
+// pass --session no longer collide on a shared literal 'default'.
 
 import { existsSync, promises as fsp } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -30,6 +35,7 @@ import {
   startSession, withActivePage,
   readSessionMeta, sessionMetaPath, sessionLogPath,
   isPidAlive, clearStaleSessionMeta, SESSION_DIR,
+  resolveSessionName,
 } from './browser.mjs';
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -54,7 +60,7 @@ function parseFlags(argv) {
 
 const sub = process.argv[2];
 const { flags, positional } = parseFlags(process.argv.slice(3));
-const name = flags.session ?? process.env.PW_SESSION ?? 'default';
+const name = resolveSessionName(flags.session);
 
 function die(msg, code = 1) {
   console.error(msg);
@@ -219,7 +225,7 @@ async function cmdSnap() {
   const outArg = positional[0];
   const outPath = outArg
     ? path.resolve(outArg)
-    : path.resolve('screenshots', `${new Date().toISOString().replace(/[:.]/g, '-')}.png`);
+    : path.resolve('screenshots', `${name}-${new Date().toISOString().replace(/[:.]/g, '-')}.png`);
   await fsp.mkdir(path.dirname(outPath), { recursive: true });
   await withActivePage(async (page) => {
     await page.screenshot({ path: outPath, fullPage: flags['full-page'] === true });

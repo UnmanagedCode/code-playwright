@@ -156,7 +156,7 @@ CLI: load a URL, save a PNG.
 node snap.mjs <url> [outputPath]
 ```
 
-- Default output: `screenshots/<ISO-timestamp>.png` (the directory is gitignored).
+- Default output: `screenshots/<ISO-timestamp>-<random>.png` (the directory is gitignored; the random suffix keeps concurrent invocations from colliding).
 - Waits up to 5 s for the URL to be reachable before navigating.
 - Useful env vars:
   | Var | Effect | Example |
@@ -183,13 +183,17 @@ node session.mjs eval     <node-snippet> [--session NAME]
 node session.mjs stop     [--session NAME]
 ```
 
-Default session name is `default`; override with `--session <name>` or `PW_SESSION=<name>`. Multiple named sessions run side-by-side with their own chromium / port / user-data-dir.
+Session name resolution, in precedence order: `--session <name>` > `PW_SESSION=<name>` env var > an **auto-derived default**. The auto-derived default is `auto-<worktree-basename>-<hash>`, computed from the nearest enclosing git worktree/repo root (falling back to the current directory outside a repo) — stable across every turn issued from the same runner/worktree (turns can `cd` around; the worktree root doesn't move), but distinct across separate runners in separate worktrees or checkouts. This means two runners that never pass `--session` no longer collide the way they would on a shared literal `default`. Multiple named sessions (explicit or auto) run side-by-side with their own chromium / port / user-data-dir.
 
 Behaviour worth knowing:
 
 - `start` **refuses** if a session of that name is already running (exit 1). Pass `--force` to stop-then-start (drops all page state). Stale metadata (PID gone) is cleaned up silently.
 - Per-turn commands (`goto`/`snap`/`eval`) **never auto-start** a daemon — they fail with a clear error if none exists.
 - `eval` runs a JS snippet in the **daemon's Node process** with `page`, `context`, and `browser` Playwright handles in scope. Use it to batch multiple Playwright actions in one turn. Use `page.evaluate("…")` *from inside* the snippet when you need browser-side JS — that's why there's no separate in-page-eval command. The return value is JSON-printed to stdout.
+
+### Parallel usage
+
+Two runners working in separate worktrees or checkouts get isolated sessions automatically — no flags needed. A runner that wants a human-chosen or explicitly shared name (e.g. two turns of a CI job that don't share a worktree, or deliberately attaching a second process to the same browser) should still pass `--session NAME` or set `PW_SESSION=NAME`; explicit names always win over the auto-derived one, and `start` still refuses a second `start` under the same explicit name unless `--force` is given. Two runners sharing a single directory (not just a worktree) without an explicit `--session` will still resolve to the same auto-derived name and collide — pass distinct explicit names in that case.
 
 ### Example: navigate → inspect → act
 
@@ -206,9 +210,10 @@ node session.mjs stop
 
 ### Where things live
 
-- Session metadata: `~/.cache/termux-playwright-harness/session-<name>.json` (cdpEndpoint, daemon pid, chromium pid, user-data-dir, startedAt). Created by `start`, removed on graceful `stop`.
+- Session metadata: `~/.cache/termux-playwright-harness/session-<name>.json` (cdpEndpoint, daemon pid, chromium pid, user-data-dir, startedAt). Created by `start`, removed on graceful `stop`. `<name>` is whatever `--session`/`PW_SESSION`/the auto-derived default resolved to.
 - Daemon log: `~/.cache/termux-playwright-harness/session-<name>.log` — chromium stdout/stderr + daemon-side messages. Check here if `start` reports the daemon failed to come up.
 - Chromium user-data-dir: a fresh `mkdtemp` per `start`, wiped on `stop`.
+- `session.mjs snap`'s default output path is `screenshots/<name>-<timestamp>.png` — the session name prefix keeps concurrent sessions' screenshots from colliding even if they share a `screenshots/` dir.
 
 ### Programmatic API
 
@@ -221,7 +226,7 @@ await withActivePage(async (page, { context, browser }) => {
 }, { name: 'default' });
 ```
 
-Lower-level helpers: `startSession`, `connectSession`, `readSessionMeta`, `isPidAlive`, `clearStaleSessionMeta`.
+Lower-level helpers: `startSession`, `connectSession`, `readSessionMeta`, `isPidAlive`, `clearStaleSessionMeta`, `defaultSessionName`, `resolveSessionName`.
 
 ## Writing your own debug script
 
