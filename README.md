@@ -12,8 +12,20 @@ termux-playwright-harness/
 ├── snap.mjs          generic screenshot CLI (single-shot)
 ├── session.mjs       multi-turn session CLI (start / stop / status / goto / snap / eval)
 ├── test/             unit tests for chromium discovery (node --test)
+├── conductor.plugin.json   code-conductor plugin manifest (convention + scaffold, no backend)
+├── conventions/      convention fragment(s) referenced by the manifest
+├── scaffold/         scaffold fragment(s) referenced by the manifest
 └── package.json      playwright-core only
 ```
+
+## Use as a code-conductor plugin
+
+This repo ships a `conductor.plugin.json` so it can be installed as a [code-conductor](https://github.com) plugin. It's conventions-and-scaffold-only — no backend, frontend, or MCP server — so enabling it never starts a process:
+
+- **`visual-verification`** (project convention) — tells agents to test and visually verify UX changes via the harness before considering them done. Degrades gracefully: works whether or not a project-local wrapper exists yet.
+- **`harness-wrapper`** (project scaffold) — a one-time bootstrap directive for a new project's first agent to build a thin project-local wrapper (under `debug/`) over this shared harness.
+
+The two pair naturally — the scaffold builds the wrapper the convention then tells you to use — but each is independently selectable.
 
 ## Growing the harness while debugging
 

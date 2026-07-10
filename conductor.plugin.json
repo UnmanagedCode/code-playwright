@@ -1,0 +1,23 @@
+{
+  "id": "termux-playwright-harness",
+  "name": "Playwright Harness",
+  "version": "1.0.0",
+  "pluginApi": 1,
+  "conventions": [
+    {
+      "slug": "visual-verification",
+      "name": "Visually verify UX changes",
+      "description": "Test and visually verify UX changes via the Playwright harness before considering them done",
+      "file": "conventions/visual-verification.md",
+      "scope": "project"
+    }
+  ],
+  "scaffolds": [
+    {
+      "slug": "harness-wrapper",
+      "name": "Scaffold a visual-verification harness wrapper",
+      "description": "First agent builds a project-local wrapper over the shared Playwright harness for visual UX verification",
+      "file": "scaffold/harness-wrapper.md"
+    }
+  ]
+}
