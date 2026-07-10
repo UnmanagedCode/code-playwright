@@ -1,7 +1,9 @@
-// Thin wrapper around playwright-core that launches the Termux-installed
-// system Chromium instead of Playwright's bundled binary (which doesn't
-// ship for Android ARM). Use this from ad-hoc debug scripts so they don't
-// all have to repeat the executablePath / flags dance.
+// Thin wrapper around playwright-core that launches the system Chromium
+// (Termux on Android, or a distro package like Debian's) instead of
+// Playwright's bundled binary (which doesn't ship for Android ARM, and
+// which we don't want to require a separate download of on any platform).
+// Use this from ad-hoc debug scripts so they don't all have to repeat the
+// executablePath / flags dance.
 //
 //   import { withPage } from 'termux-playwright-harness/browser.mjs';   // or relative path
 //   await withPage(async (page) => {
@@ -17,15 +19,102 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-// Default to the Termux chromium-browser launcher. Override with
-// PLAYWRIGHT_CHROMIUM_BIN if you've installed Chrome elsewhere.
-const DEFAULT_BIN = process.env.PLAYWRIGHT_CHROMIUM_BIN
-  || '/data/data/com.termux/files/usr/bin/chromium-browser';
+// --- Chromium discovery --------------------------------------------------
+//
+// Resolution order: PLAYWRIGHT_CHROMIUM_BIN env override, then a PATH scan
+// of well-known binary names, then a couple of platform-specific absolute
+// paths as a last resort (for contexts where PATH doesn't carry the usual
+// install location, e.g. some non-interactive Termux invocations).
 
-// Termux chromium needs --no-sandbox (no setuid sandbox helper on Android)
-// and --disable-dev-shm-usage (no /dev/shm mount). The other flags reduce
-// memory pressure and skip features that don't matter for visual debugging.
-const TERMUX_CHROMIUM_ARGS = [
+// Termux sets PREFIX to something like /data/data/com.termux/files/usr on
+// every invocation; generic Linux never does. More robust than
+// os.platform() (reports 'linux' on both) or uname sniffing.
+export function isTermux() {
+  return !!process.env.PREFIX && process.env.PREFIX.includes('com.termux');
+}
+
+const TERMUX_ABS_PATH = '/data/data/com.termux/files/usr/bin/chromium-browser';
+const CANDIDATE_NAMES = ['chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome'];
+const ABSOLUTE_FALLBACKS = [TERMUX_ABS_PATH];
+
+// Resolve `name` against PATH the way a shell would, without spawning
+// `which` — no subprocess, no assumption it's installed, works identically
+// on Termux and Debian since both are POSIX.
+function resolveOnPath(name, pathEnv) {
+  for (const dir of pathEnv.split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, name);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+// Pure core: takes every input explicitly and never touches process.env
+// itself, so it can be unit-tested with a fake PATH/candidate list. Returns
+// { path, tried } where `tried` is the ordered probe list for error text.
+export function resolveChromiumBin({
+  envOverride,
+  pathEnv = '',
+  names = CANDIDATE_NAMES,
+  absoluteFallbacks = ABSOLUTE_FALLBACKS,
+} = {}) {
+  const tried = [];
+  if (envOverride) {
+    tried.push(`${envOverride} (PLAYWRIGHT_CHROMIUM_BIN)`);
+    if (existsSync(envOverride)) return { path: envOverride, tried };
+    // An explicit override that's missing is almost certainly a typo — fail
+    // loud rather than silently falling through to auto-discovery.
+    return { path: null, tried, overrideInvalid: true };
+  }
+  for (const name of names) {
+    tried.push(`${name} (on PATH)`);
+    const hit = resolveOnPath(name, pathEnv);
+    if (hit) return { path: hit, tried };
+  }
+  for (const abs of absoluteFallbacks) {
+    tried.push(abs);
+    if (existsSync(abs)) return { path: abs, tried };
+  }
+  return { path: null, tried };
+}
+
+export function findChromiumBin() {
+  const { path: found, tried, overrideInvalid } = resolveChromiumBin({
+    envOverride: process.env.PLAYWRIGHT_CHROMIUM_BIN,
+    pathEnv: process.env.PATH ?? '',
+  });
+  if (found) return found;
+
+  const installCmd = isTermux() ? 'pkg install chromium' : 'apt install chromium';
+  if (overrideInvalid) {
+    throw new Error(
+      `PLAYWRIGHT_CHROMIUM_BIN is set to '${process.env.PLAYWRIGHT_CHROMIUM_BIN}' but that path doesn't exist.`,
+    );
+  }
+  throw new Error(
+    'Could not find a Chromium binary. Tried:\n' +
+    tried.map((t) => `  - ${t}`).join('\n') + '\n' +
+    `Install one (\`${installCmd}\`) or set PLAYWRIGHT_CHROMIUM_BIN to an explicit path.`,
+  );
+}
+
+function requireExecutable(bin) {
+  if (!existsSync(bin)) {
+    const installCmd = isTermux() ? 'pkg install chromium' : 'apt install chromium';
+    throw new Error(
+      `Chromium binary not found at ${bin}. Install with \`${installCmd}\` or set PLAYWRIGHT_CHROMIUM_BIN.`,
+    );
+  }
+  return bin;
+}
+
+// Launch flags: --no-sandbox and --disable-dev-shm-usage are required on
+// Termux (no setuid sandbox helper / no /dev/shm mount on Android); the
+// rest reduce memory pressure and skip UI that doesn't matter for
+// automation. All seven are also safe/recommended for headless automation
+// on generic Debian/Linux — see README Troubleshooting for the per-flag
+// rationale — so this list stays unconditional on every platform.
+const CHROMIUM_ARGS = [
   '--no-sandbox',
   '--disable-dev-shm-usage',
   '--disable-gpu',
@@ -37,19 +126,14 @@ const TERMUX_CHROMIUM_ARGS = [
 
 export async function launchBrowser({
   headless = true,
-  executablePath = DEFAULT_BIN,
+  executablePath,
   extraArgs = [],
 } = {}) {
-  if (!existsSync(executablePath)) {
-    throw new Error(
-      `Chromium binary not found at ${executablePath}. ` +
-      `Install with \`pkg install chromium\` or set PLAYWRIGHT_CHROMIUM_BIN.`,
-    );
-  }
+  const bin = requireExecutable(executablePath ?? findChromiumBin());
   return chromium.launch({
     headless,
-    executablePath,
-    args: [...TERMUX_CHROMIUM_ARGS, ...extraArgs],
+    executablePath: bin,
+    args: [...CHROMIUM_ARGS, ...extraArgs],
   });
 }
 
@@ -108,9 +192,10 @@ export async function waitForServer(url, { timeoutMs = 10_000 } = {}) {
 // (launchServer + connect would seem natural but tears down contexts on
 // disconnect, which breaks state-across-turns.)
 
-export const SESSION_DIR = path.join(
-  os.homedir(), '.cache', 'termux-playwright-harness',
-);
+// Respect XDG_CACHE_HOME if set (generic Linux convention); Termux doesn't
+// set this by default, so the fallback below is unchanged there.
+const CACHE_ROOT = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
+export const SESSION_DIR = path.join(CACHE_ROOT, 'termux-playwright-harness');
 
 // Walk up from `startDir` looking for `.git` — a directory for a normal
 // repo, a file for a worktree checkout (like this one). Used to anchor the
@@ -200,15 +285,10 @@ export async function clearStaleSessionMeta(name = resolveSessionName()) {
 export async function startSession({
   name = resolveSessionName(),
   headless = true,
-  executablePath = DEFAULT_BIN,
+  executablePath,
   extraArgs = [],
 } = {}) {
-  if (!existsSync(executablePath)) {
-    throw new Error(
-      `Chromium binary not found at ${executablePath}. ` +
-      `Install with \`pkg install chromium\` or set PLAYWRIGHT_CHROMIUM_BIN.`,
-    );
-  }
+  const bin = requireExecutable(executablePath ?? findChromiumBin());
   await fsp.mkdir(SESSION_DIR, { recursive: true });
 
   const cdpPort = await findFreePort();
@@ -217,7 +297,7 @@ export async function startSession({
   );
 
   const args = [
-    ...TERMUX_CHROMIUM_ARGS,
+    ...CHROMIUM_ARGS,
     `--remote-debugging-port=${cdpPort}`,
     `--user-data-dir=${userDataDir}`,
     ...(headless ? ['--headless=new'] : []),
@@ -225,7 +305,7 @@ export async function startSession({
     'about:blank',
   ];
 
-  const child = spawn(executablePath, args, {
+  const child = spawn(bin, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (b) => process.stdout.write(`[chromium] ${b}`));

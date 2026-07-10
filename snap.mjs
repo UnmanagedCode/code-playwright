@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generic screenshot CLI. Open a URL in headless Termux chromium and save
+// Generic screenshot CLI. Open a URL in headless system chromium and save
 // a PNG.
 //
 //   node snap.mjs <url> [outputPath]
@@ -11,7 +11,7 @@
 // from browser.mjs and then drives `withPage` directly.
 //
 // Useful env vars:
-//   PLAYWRIGHT_CHROMIUM_BIN  — override chromium path (default: termux chromium-browser)
+//   PLAYWRIGHT_CHROMIUM_BIN  — override chromium path (default: platform auto-discovery)
 //   SNAP_VIEWPORT            — "<w>x<h>" (default 1280x800)
 //   SNAP_WAIT                — CSS selector to wait for before snapping
 //   SNAP_FULL_PAGE           — "1" to capture the full scroll height
