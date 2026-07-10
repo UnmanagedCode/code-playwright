@@ -2,12 +2,13 @@
   "name": "termux-playwright-harness",
   "private": true,
   "type": "module",
-  "description": "Generic Playwright + Termux-Chromium harness — launch, snap, and boot child servers for visual UI debugging on Android/Termux.",
+  "description": "Generic Playwright + system-Chromium harness — launch, snap, and boot child servers for visual UI debugging on Termux (Android) or Debian/generic Linux.",
   "scripts": {
     "snap": "node snap.mjs",
-    "session": "node session.mjs"
+    "session": "node session.mjs",
+    "test": "node --test"
   },
-  "devDependencies": {
+  "dependencies": {
     "playwright-core": "^1.49.0"
   }
 }

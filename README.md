@@ -1,17 +1,31 @@
 # termux-playwright-harness
 
-A small Playwright setup for driving a webapp through the **system Chromium** installed via Termux. Useful for visually verifying changes — screenshots, DOM assertions, console inspection — from an Android phone or any other host without a desktop browser.
+A small Playwright setup for driving a webapp through the **system Chromium** on Termux (Android) or a generic Debian/Linux host. Useful for visually verifying changes — screenshots, DOM assertions, console inspection — from a phone or any other host without a desktop browser. The name is historical (it started Termux-only); the harness itself is cross-platform.
 
-Generic infrastructure only. Feature-specific scripts go in the consuming project (or stay as throwaway one-liners in the shell). The goal is reusable pieces for any current or future webapp running on Termux.
+Generic infrastructure only. Feature-specific scripts go in the consuming project (or stay as throwaway one-liners in the shell). The goal is reusable pieces for any current or future webapp running on either platform.
 
 ```
 termux-playwright-harness/
 ├── browser.mjs       launchBrowser / withPage / waitForServer / findFreePort / bootServer
 │                     + startSession / connectSession / withActivePage (multi-turn)
+│                     + findChromiumBin / resolveChromiumBin (cross-platform discovery)
 ├── snap.mjs          generic screenshot CLI (single-shot)
 ├── session.mjs       multi-turn session CLI (start / stop / status / goto / snap / eval)
+├── test/             unit tests for chromium discovery (node --test)
+├── conductor.plugin.json   code-conductor plugin manifest (convention + scaffold, no backend)
+├── conventions/      convention fragment(s) referenced by the manifest
+├── scaffold/         scaffold fragment(s) referenced by the manifest
 └── package.json      playwright-core only
 ```
+
+## Use as a code-conductor plugin
+
+This repo ships a `conductor.plugin.json` so it can be installed as a [code-conductor](https://github.com) plugin. It's conventions-and-scaffold-only — no backend, frontend, or MCP server — so enabling it never starts a process:
+
+- **`visual-verification`** (project convention) — tells agents to test and visually verify UX changes via the harness before considering them done. Degrades gracefully: works whether or not a project-local wrapper exists yet.
+- **`harness-wrapper`** (project scaffold) — a one-time bootstrap directive for a new project's first agent to build a thin project-local wrapper (under `debug/`) over this shared harness.
+
+The two pair naturally — the scaffold builds the wrapper the convention then tells you to use — but each is independently selectable.
 
 ## Growing the harness while debugging
 
@@ -33,15 +47,31 @@ When in doubt, ask: *"Would a teammate debugging a totally different feature nex
 
 ## Prereqs
 
-- **Termux Chromium** (provides both the browser binary and the launcher):
-  ```bash
-  pkg install chromium
-  which chromium-browser
-  # → /data/data/com.termux/files/usr/bin/chromium-browser
-  ```
 - **Node 22+**.
+- A system Chromium/Chrome binary:
+  - **Termux**:
+    ```bash
+    pkg install chromium
+    which chromium-browser
+    # → /data/data/com.termux/files/usr/bin/chromium-browser
+    ```
+  - **Debian/generic Linux**:
+    ```bash
+    apt install chromium
+    ```
+    (`google-chrome` / `google-chrome-stable` also work if that's what's installed.)
 
-> `playwright-core` is intentionally used instead of `playwright`. The full `playwright` package downloads its own Chromium build on install, and those builds aren't published for Android ARM. `playwright-core` exposes the same API minus the auto-download — we point `executablePath` at the system Chromium.
+`browser.mjs` finds the binary automatically — no config needed on either platform. Resolution order (see `findChromiumBin`/`resolveChromiumBin` in `browser.mjs`):
+
+1. `PLAYWRIGHT_CHROMIUM_BIN` env var, if set — used as-is; an invalid override fails loudly rather than falling through.
+2. A PATH scan of `chromium`, `chromium-browser`, `google-chrome-stable`, `google-chrome`, in that order.
+3. The Termux absolute path (`/data/data/com.termux/files/usr/bin/chromium-browser`), as a last-resort fallback for contexts where PATH doesn't carry the usual install location.
+
+If nothing is found, the error lists every candidate that was tried plus the install command for your platform.
+
+> **Debian/Linux support is implemented and unit-tested** (`test/browser.test.mjs` exercises `resolveChromiumBin`'s probe order and fallbacks), **but has not been exercised on real Debian hardware** from this repo — only Termux. Please report issues if something doesn't work there.
+
+> `playwright-core` is intentionally used instead of `playwright`. The full `playwright` package downloads its own Chromium build on install, and those builds aren't published for Android ARM. `playwright-core` exposes the same API minus the auto-download — we point `executablePath` at the system Chromium on whichever platform you're on.
 
 ## Install
 
@@ -90,7 +120,7 @@ Open `home.png` to confirm the page rendered. If you see a blank or chrome-error
 
 ### `browser.mjs`
 
-Wraps `playwright-core`'s `chromium.launch()` with the executable path and Termux-specific flags (`--no-sandbox`, `--disable-dev-shm-usage`, etc.).
+Wraps `playwright-core`'s `chromium.launch()` with an auto-discovered executable path (see [Prereqs](#prereqs)) and a set of launch flags (`--no-sandbox`, `--disable-dev-shm-usage`, etc.) that are safe on both Termux and Debian — see [Troubleshooting](#troubleshooting) for the per-flag rationale.
 
 ```js
 import { withPage, waitForServer } from '../../termux-playwright-harness/browser.mjs';
@@ -146,7 +176,7 @@ const srv = await bootServer({
 
 The child receives `PORT=<chosen-port>` in its env — your `entry` script should honour `process.env.PORT`.
 
-Override the chromium path with `PLAYWRIGHT_CHROMIUM_BIN=/some/path` if your install lives elsewhere.
+Override the chromium path with `PLAYWRIGHT_CHROMIUM_BIN=/some/path` if auto-discovery picks the wrong binary or your install lives somewhere nonstandard.
 
 ### `snap.mjs`
 
@@ -164,7 +194,7 @@ node snap.mjs <url> [outputPath]
   | `SNAP_VIEWPORT` | Override viewport | `SNAP_VIEWPORT=375x812` (iPhone-ish) |
   | `SNAP_WAIT` | CSS selector to wait for before snapping | `SNAP_WAIT='.sidebar .session-row'` |
   | `SNAP_FULL_PAGE` | `1` → capture full scroll height | `SNAP_FULL_PAGE=1` |
-  | `PLAYWRIGHT_CHROMIUM_BIN` | Override chromium binary path | `…/chrome` |
+  | `PLAYWRIGHT_CHROMIUM_BIN` | Override chromium binary path (default: platform auto-discovery, see [Prereqs](#prereqs)) | `…/chrome` |
 
 For "boot + snap + tear down" in a single command, write a small consumer CLI in your own project — `bootServer` + `withPage` is two imports and ~15 lines.
 
@@ -210,8 +240,8 @@ node session.mjs stop
 
 ### Where things live
 
-- Session metadata: `~/.cache/termux-playwright-harness/session-<name>.json` (cdpEndpoint, daemon pid, chromium pid, user-data-dir, startedAt). Created by `start`, removed on graceful `stop`. `<name>` is whatever `--session`/`PW_SESSION`/the auto-derived default resolved to.
-- Daemon log: `~/.cache/termux-playwright-harness/session-<name>.log` — chromium stdout/stderr + daemon-side messages. Check here if `start` reports the daemon failed to come up.
+- Session metadata: `$XDG_CACHE_HOME/termux-playwright-harness/session-<name>.json` if `XDG_CACHE_HOME` is set, else `~/.cache/termux-playwright-harness/session-<name>.json` (cdpEndpoint, daemon pid, chromium pid, user-data-dir, startedAt). Created by `start`, removed on graceful `stop`. `<name>` is whatever `--session`/`PW_SESSION`/the auto-derived default resolved to.
+- Daemon log: same directory, `session-<name>.log` — chromium stdout/stderr + daemon-side messages. Check here if `start` reports the daemon failed to come up.
 - Chromium user-data-dir: a fresh `mkdtemp` per `start`, wiped on `stop`.
 - `session.mjs snap`'s default output path is `screenshots/<name>-<timestamp>.png` — the session name prefix keeps concurrent sessions' screenshots from colliding even if they share a `screenshots/` dir.
 
@@ -251,12 +281,35 @@ Useful Playwright APIs for visual debugging:
 
 ## Troubleshooting
 
-**Snap produces a blank/black image.** Termux Chromium can fail silently without `--no-sandbox`; `browser.mjs` already passes it. If you ever override `extraArgs` from a custom script, keep the defaults in.
+**Snap produces a blank/black image.** Chromium can fail silently without `--no-sandbox`; `browser.mjs` already passes it. If you ever override `extraArgs` from a custom script, keep the defaults in.
 
-**`Failed to launch chromium because executable doesn't exist`.** Either Chromium isn't installed (`pkg install chromium`) or your install isn't at the default path; set `PLAYWRIGHT_CHROMIUM_BIN`.
+**`Could not find a Chromium binary. Tried: ...`.** Nothing was found on PATH or at the known fallback paths. The error lists every candidate that was probed. Install Chromium (`pkg install chromium` on Termux, `apt install chromium` on Debian) or set `PLAYWRIGHT_CHROMIUM_BIN` to an explicit path.
+
+**`PLAYWRIGHT_CHROMIUM_BIN is set to '...' but that path doesn't exist`.** The env override itself points at a missing file — fix the path or unset the var to fall back to auto-discovery.
 
 **`Target page, context or browser has been closed`.** Usually a page-side JS error crashed the renderer. Page errors are already piped to the terminal via the `console` / `weberror` listeners in `withPage` — scroll up.
 
+**Why does every launch pass `--no-sandbox` and friends unconditionally, even on Debian?** All seven flags in `CHROMIUM_ARGS` (`browser.mjs`) are either required on Termux or harmless/standard for headless automation everywhere, so there's no platform branching:
+
+| Flag | Why it's always on |
+|---|---|
+| `--no-sandbox` | Required on Termux (no setuid sandbox helper on Android); on Debian it's the standard workaround for CI/root/container hosts lacking the sandbox setuid bit — acceptable since this harness only drives local/trusted debug targets, not untrusted web content. |
+| `--disable-dev-shm-usage` | Required on Termux (no `/dev/shm` mount); on Debian it just redirects shared-memory IPC to `/tmp`, which is harmless. |
+| `--disable-gpu` | Avoids GPU-process crashes/blank renders on Termux's software-only GPU stack; also the standard recommendation for consistent headless screenshots regardless of the host's GPU/driver situation. |
+| `--disable-software-rasterizer` | Companion to `--disable-gpu`; a no-op if that fallback path is never hit. |
+| `--disable-extensions` | No extensions are ever installed in this automated context on either platform. |
+| `--no-first-run` | Skips first-run setup dialogs that would otherwise block automation the first time a fresh profile/user-data-dir is used. |
+| `--no-default-browser-check` | Skips the "set as default browser" prompt; irrelevant but harmless if it ever fired. |
+
+**Manually sanity-check chromium discovery** without needing a real install — `resolveChromiumBin` is pure and takes its inputs explicitly:
+
+```bash
+node -e "
+import('./browser.mjs').then(({ resolveChromiumBin }) => {
+  console.log(resolveChromiumBin({ pathEnv: '/nonexistent', absoluteFallbacks: [] }));
+});"
+```
+
 ## Why no Playwright test runner?
 
-This harness exists for *visual* verification — eyes on a screenshot, or interactive scripting — which a headless test runner doesn't help with. If a Playwright assertion is ever worth committing, fold it into your project's existing test setup rather than growing a second runner here.
+This harness exists for *visual* verification — eyes on a screenshot, or interactive scripting — which a headless test runner doesn't help with. If a Playwright assertion is ever worth committing, fold it into your project's existing test setup rather than growing a second runner here. The `test/` directory is a narrow exception: it unit-tests the pure chromium-discovery logic (`resolveChromiumBin`) with `node --test`, not browser behavior — that stance is unchanged.
