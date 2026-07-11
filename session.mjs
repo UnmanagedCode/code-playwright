@@ -19,8 +19,8 @@
 // Use `page.evaluate("…")` from inside the snippet when you really need
 // browser-side JS. The return value is JSON-printed to stdout.
 //
-// Session metadata lives at $XDG_CACHE_HOME/termux-playwright-harness/session-<name>.json
-// (or ~/.cache/termux-playwright-harness/... if XDG_CACHE_HOME is unset).
+// Session metadata lives at $XDG_CACHE_HOME/code-playwright/session-<name>.json
+// (or ~/.cache/code-playwright/... if XDG_CACHE_HOME is unset).
 // Session name resolution (see resolveSessionName in browser.mjs):
 //   --session NAME  >  PW_SESSION env  >  auto-derived from the enclosing
 //   git worktree/repo root (falls back to cwd outside a repo).

@@ -1,6 +1,6 @@
 # Scaffold a visual-verification harness wrapper
 
-Build a small, project-local wrapper around the shared `termux-playwright-harness` so future UX changes in this project are easy to verify visually. This is a one-time bootstrap — after this, the `visual-verification` convention tells future agents to reach for the wrapper you're about to create.
+Build a small, project-local wrapper around the shared `code-playwright` so future UX changes in this project are easy to verify visually. This is a one-time bootstrap — after this, the `visual-verification` convention tells future agents to reach for the wrapper you're about to create.
 
 Keep it thin: the generic browser-driving logic (launching chromium, waiting for a server, taking screenshots, multi-turn sessions) already lives in the shared harness repo. This wrapper should contain **only** project-specific glue — the entry file, the port, and the key routes/selectors worth snapping.
 
@@ -10,7 +10,7 @@ Adapt all of the following to whatever project you're actually running in (its s
 
 1. Confirm the shared harness is cloned as a sibling repo (see its README, "Using from a sibling project"). If it isn't, clone it there first.
 2. Add a small script under this project's `debug/` directory (create the directory if it doesn't exist) that:
-   - Imports `withPage`, `bootServer`, and/or `withActivePage` from `../../termux-playwright-harness/browser.mjs` (adjust the relative path if the sibling repo lives elsewhere).
+   - Imports `withPage`, `bootServer`, and/or `withActivePage` from `../../code-playwright/browser.mjs` (adjust the relative path if the sibling repo lives elsewhere).
    - Boots this project's server via `bootServer({ cwd, entry, ... })`, honoring `process.env.PORT` in the project's own entry point if it doesn't already.
    - Navigates to the project's key screen(s) — whatever the most representative "does this app render" route is — and saves a screenshot.
    - Tears the server down cleanly on exit (`bootServer`'s `close()` handles this).

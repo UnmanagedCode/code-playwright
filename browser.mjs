@@ -5,7 +5,7 @@
 // Use this from ad-hoc debug scripts so they don't all have to repeat the
 // executablePath / flags dance.
 //
-//   import { withPage } from 'termux-playwright-harness/browser.mjs';   // or relative path
+//   import { withPage } from 'code-playwright/browser.mjs';   // or relative path
 //   await withPage(async (page) => {
 //     await page.goto('http://127.0.0.1:8787');
 //     await page.screenshot({ path: 'screenshots/home.png' });
@@ -195,7 +195,7 @@ export async function waitForServer(url, { timeoutMs = 10_000 } = {}) {
 // Respect XDG_CACHE_HOME if set (generic Linux convention); Termux doesn't
 // set this by default, so the fallback below is unchanged there.
 const CACHE_ROOT = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
-export const SESSION_DIR = path.join(CACHE_ROOT, 'termux-playwright-harness');
+export const SESSION_DIR = path.join(CACHE_ROOT, 'code-playwright');
 
 // Walk up from `startDir` looking for `.git` — a directory for a normal
 // repo, a file for a worktree checkout (like this one). Used to anchor the
@@ -222,7 +222,7 @@ function sanitizeForName(s) {
 // concurrent runners no longer collide on a shared literal 'default'.
 //
 // IMPORTANT: this harness is consumed by other projects via relative import
-// (`../../termux-playwright-harness/browser.mjs`), so the walk MUST start
+// (`../../code-playwright/browser.mjs`), so the walk MUST start
 // from `process.cwd()` — the invoking runner's directory — and never from
 // this file's own location (`import.meta.url` / `__dirname`). Anchoring on
 // the harness's own file path would collapse every consumer back onto one
