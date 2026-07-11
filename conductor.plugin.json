@@ -10,7 +10,7 @@
       "description": "Test and visually verify UX changes via the Playwright harness before considering them done",
       "file": "conventions/visual-verification.md",
       "scope": "project",
-      "scaffold": { "file": "scaffold/harness-wrapper.md" }
+      "scaffold": { "file": "scaffold/harness.md" }
     }
   ]
 }
