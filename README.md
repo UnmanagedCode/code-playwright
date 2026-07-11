@@ -1,11 +1,11 @@
-# termux-playwright-harness
+# code-playwright
 
 A small Playwright setup for driving a webapp through the **system Chromium** on Termux (Android) or a generic Debian/Linux host. Useful for visually verifying changes — screenshots, DOM assertions, console inspection — from a phone or any other host without a desktop browser. The name is historical (it started Termux-only); the harness itself is cross-platform.
 
 Generic infrastructure only. Feature-specific scripts go in the consuming project (or stay as throwaway one-liners in the shell). The goal is reusable pieces for any current or future webapp running on either platform.
 
 ```
-termux-playwright-harness/
+code-playwright/
 ├── browser.mjs       launchBrowser / withPage / waitForServer / findFreePort / bootServer
 │                     + startSession / connectSession / withActivePage (multi-turn)
 │                     + findChromiumBin / resolveChromiumBin (cross-platform discovery)
@@ -76,7 +76,7 @@ If nothing is found, the error lists every candidate that was tried plus the ins
 ## Install
 
 ```bash
-cd ~/project/termux-playwright-harness
+cd ~/project/code-playwright
 npm install
 ```
 
@@ -85,12 +85,12 @@ npm install
 This package is consumed via direct relative import — no submodule, no npm publish. Clone it as a sibling of your project:
 
 ```bash
-git clone git@github.com:UnmanagedCode/termux-playwright-harness.git ~/project/termux-playwright-harness
+git clone git@github.com:UnmanagedCode/code-playwright.git ~/project/code-playwright
 ```
 
 ```
 ~/project/
-├── termux-playwright-harness/    # this repo
+├── code-playwright/    # this repo
 ├── my-webapp/                    # your project
 │   └── debug/
 │       ├── boot-myapp.mjs        # optional thin wrapper for app-specific defaults
@@ -101,10 +101,10 @@ git clone git@github.com:UnmanagedCode/termux-playwright-harness.git ~/project/t
 Then import directly:
 
 ```js
-import { withPage, bootServer } from '../../termux-playwright-harness/browser.mjs';
+import { withPage, bootServer } from '../../code-playwright/browser.mjs';
 ```
 
-Because `playwright-core` is installed under `~/project/termux-playwright-harness/node_modules/`, Node's module resolution finds it relative to `browser.mjs` regardless of where the importer lives.
+Because `playwright-core` is installed under `~/project/code-playwright/node_modules/`, Node's module resolution finds it relative to `browser.mjs` regardless of where the importer lives.
 
 ## Quick smoke test
 
@@ -123,7 +123,7 @@ Open `home.png` to confirm the page rendered. If you see a blank or chrome-error
 Wraps `playwright-core`'s `chromium.launch()` with an auto-discovered executable path (see [Prereqs](#prereqs)) and a set of launch flags (`--no-sandbox`, `--disable-dev-shm-usage`, etc.) that are safe on both Termux and Debian — see [Troubleshooting](#troubleshooting) for the per-flag rationale.
 
 ```js
-import { withPage, waitForServer } from '../../termux-playwright-harness/browser.mjs';
+import { withPage, waitForServer } from '../../code-playwright/browser.mjs';
 
 await waitForServer('http://127.0.0.1:8787');
 await withPage(async (page) => {
@@ -139,7 +139,7 @@ await withPage(async (page) => {
 - `bootServer({ cwd, entry, port?, env?, sandbox?, silent? })` — spawns an arbitrary node server as a child process on a free ephemeral port (override with `port`), waits for it to bind, and returns `{ url, port, child, sandbox?, close() }`. Cleanup is wired to parent `exit` / `SIGINT` / `SIGTERM` so a Ctrl+C'd script never leaks a server.
 
 ```js
-import { bootServer, withPage } from '../../termux-playwright-harness/browser.mjs';
+import { bootServer, withPage } from '../../code-playwright/browser.mjs';
 
 const srv = await bootServer({
   cwd: '/path/to/my-app',
@@ -240,7 +240,7 @@ node session.mjs stop
 
 ### Where things live
 
-- Session metadata: `$XDG_CACHE_HOME/termux-playwright-harness/session-<name>.json` if `XDG_CACHE_HOME` is set, else `~/.cache/termux-playwright-harness/session-<name>.json` (cdpEndpoint, daemon pid, chromium pid, user-data-dir, startedAt). Created by `start`, removed on graceful `stop`. `<name>` is whatever `--session`/`PW_SESSION`/the auto-derived default resolved to.
+- Session metadata: `$XDG_CACHE_HOME/code-playwright/session-<name>.json` if `XDG_CACHE_HOME` is set, else `~/.cache/code-playwright/session-<name>.json` (cdpEndpoint, daemon pid, chromium pid, user-data-dir, startedAt). Created by `start`, removed on graceful `stop`. `<name>` is whatever `--session`/`PW_SESSION`/the auto-derived default resolved to.
 - Daemon log: same directory, `session-<name>.log` — chromium stdout/stderr + daemon-side messages. Check here if `start` reports the daemon failed to come up.
 - Chromium user-data-dir: a fresh `mkdtemp` per `start`, wiped on `stop`.
 - `session.mjs snap`'s default output path is `screenshots/<name>-<timestamp>.png` — the session name prefix keeps concurrent sessions' screenshots from colliding even if they share a `screenshots/` dir.
@@ -248,7 +248,7 @@ node session.mjs stop
 ### Programmatic API
 
 ```js
-import { withActivePage } from '../../termux-playwright-harness/browser.mjs';
+import { withActivePage } from '../../code-playwright/browser.mjs';
 
 await withActivePage(async (page, { context, browser }) => {
   await page.goto('https://example.com');
@@ -262,7 +262,7 @@ Lower-level helpers: `startSession`, `connectSession`, `readSessionMeta`, `isPid
 
 ```js
 // /tmp/check-foo.mjs
-import { withPage, waitForServer } from '../../termux-playwright-harness/browser.mjs';
+import { withPage, waitForServer } from '../../code-playwright/browser.mjs';
 
 await waitForServer('http://127.0.0.1:8787');
 await withPage(async (page) => {

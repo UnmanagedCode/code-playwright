@@ -1,5 +1,5 @@
 {
-  "name": "termux-playwright-harness",
+  "name": "code-playwright",
   "private": true,
   "type": "module",
   "description": "Generic Playwright + system-Chromium harness — launch, snap, and boot child servers for visual UI debugging on Termux (Android) or Debian/generic Linux.",
