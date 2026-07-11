@@ -9,15 +9,8 @@
       "name": "Visually verify UX changes",
       "description": "Test and visually verify UX changes via the Playwright harness before considering them done",
       "file": "conventions/visual-verification.md",
-      "scope": "project"
-    }
-  ],
-  "scaffolds": [
-    {
-      "slug": "harness-wrapper",
-      "name": "Scaffold a visual-verification harness wrapper",
-      "description": "First agent builds a project-local wrapper over the shared Playwright harness for visual UX verification",
-      "file": "scaffold/harness-wrapper.md"
+      "scope": "project",
+      "scaffold": { "file": "scaffold/harness-wrapper.md" }
     }
   ]
 }
