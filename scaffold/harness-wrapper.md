@@ -8,7 +8,7 @@ Keep it thin: the generic browser-driving logic (launching chromium, waiting for
 
 Adapt all of the following to whatever project you're actually running in (its server entry point, port convention, and key screens) — don't copy these verbatim:
 
-1. The shared `code-playwright` harness is already installed as a conductor plugin and present as a sibling project — there's nothing to clone. It's available at `../../code-playwright/browser.mjs` relative to a script in this project's `debug/` dir (the relative path may differ if the plugin lives elsewhere).
+1. The shared `code-playwright` harness is already available as a sibling project — import its browser-driving helpers directly (the next step gives the path).
 2. Add a small script under this project's `debug/` directory (create the directory if it doesn't exist) that:
    - Imports `withPage`, `bootServer`, and/or `withActivePage` from `../../code-playwright/browser.mjs` (adjust the relative path if the sibling repo lives elsewhere).
    - Boots this project's server via `bootServer({ cwd, entry, ... })`, honoring `process.env.PORT` in the project's own entry point if it doesn't already.
