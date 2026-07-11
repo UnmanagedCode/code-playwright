@@ -11,6 +11,7 @@ code-playwright/
 │                     + findChromiumBin / resolveChromiumBin (cross-platform discovery)
 ├── snap.mjs          generic screenshot CLI (single-shot)
 ├── session.mjs       multi-turn session CLI (start / stop / status / goto / snap / eval)
+├── install.sh        self-installer (npm install + platform-specific Chromium setup)
 ├── test/             unit tests for chromium discovery (node --test)
 ├── conductor.plugin.json   code-conductor plugin manifest (convention + scaffold, no backend)
 ├── conventions/      convention fragment(s) referenced by the manifest
@@ -48,37 +49,38 @@ When in doubt, ask: *"Would a teammate debugging a totally different feature nex
 ## Prereqs
 
 - **Node 22+**.
-- A system Chromium/Chrome binary:
-  - **Termux**:
-    ```bash
-    pkg install chromium
-    which chromium-browser
-    # → /data/data/com.termux/files/usr/bin/chromium-browser
-    ```
-  - **Debian/generic Linux**:
-    ```bash
-    apt install chromium
-    ```
-    (`google-chrome` / `google-chrome-stable` also work if that's what's installed.)
+- A Chromium binary — installed automatically by `bash install.sh` (see [Install](#install)):
+  - **Termux**: the system `chromium-browser` package (`pkg install chromium`) — Playwright's own Chromium builds aren't published for Android/ARM.
+  - **Debian/generic Linux**: a Playwright-managed Chromium download (`playwright-core install chromium`). This repo depends on `playwright-core`, not the full `playwright` package, but `playwright-core`'s own CLI already implements the same browser download/registry logic, so no extra `playwright` dependency is needed.
+  - You can still install a system `chromium`/`chromium-browser`/`google-chrome-stable`/`google-chrome` on Debian yourself if you prefer one — the resolution order below tries it first.
 
 `browser.mjs` finds the binary automatically — no config needed on either platform. Resolution order (see `findChromiumBin`/`resolveChromiumBin` in `browser.mjs`):
 
 1. `PLAYWRIGHT_CHROMIUM_BIN` env var, if set — used as-is; an invalid override fails loudly rather than falling through.
 2. A PATH scan of `chromium`, `chromium-browser`, `google-chrome-stable`, `google-chrome`, in that order.
-3. The Termux absolute path (`/data/data/com.termux/files/usr/bin/chromium-browser`), as a last-resort fallback for contexts where PATH doesn't carry the usual install location.
+3. **Non-Termux only**: the Playwright-managed download path, from `chromium.executablePath()` (`playwright-core`'s own computed path for whatever build `install.sh` downloaded, e.g. `~/.cache/ms-playwright/chromium-<rev>/chrome-linux64/chrome`; override the whole cache dir with `PLAYWRIGHT_BROWSERS_PATH` if needed).
+4. The Termux absolute path (`/data/data/com.termux/files/usr/bin/chromium-browser`), as a last-resort fallback for contexts where PATH doesn't carry the usual install location.
 
 If nothing is found, the error lists every candidate that was tried plus the install command for your platform.
 
 > **Debian/Linux support is implemented and unit-tested** (`test/browser.test.mjs` exercises `resolveChromiumBin`'s probe order and fallbacks), **but has not been exercised on real Debian hardware** from this repo — only Termux. Please report issues if something doesn't work there.
 
-> `playwright-core` is intentionally used instead of `playwright`. The full `playwright` package downloads its own Chromium build on install, and those builds aren't published for Android ARM. `playwright-core` exposes the same API minus the auto-download — we point `executablePath` at the system Chromium on whichever platform you're on.
+> `playwright-core` (not the full `playwright` package) is used as the runtime dependency because `playwright`'s own Chromium builds aren't published for Android/ARM (Termux). On Debian/other Linux, `playwright-core`'s own CLI still fully supports downloading a managed Chromium build (`install.sh` calls `playwright-core install chromium`) — you don't need the full `playwright` package just to get that.
 
 ## Install
 
 ```bash
 cd ~/project/code-playwright
-npm install
+bash install.sh
 ```
+
+`install.sh` is idempotent — safe to re-run after every `git pull` (a code-conductor Plugin Library invokes it automatically post-clone and post-pull). It:
+
+1. Runs `npm install`.
+2. **Termux**: installs the system `chromium` package via `pkg` (enabling the `x11-repo` first if needed), unless `chromium-browser` is already on PATH.
+3. **Debian/other Linux**: runs `playwright-core install chromium` to download a managed Chromium build (and `install-deps` if running as root).
+
+Equivalently: `npm run setup`.
 
 ## Using from a sibling project
 
@@ -283,7 +285,7 @@ Useful Playwright APIs for visual debugging:
 
 **Snap produces a blank/black image.** Chromium can fail silently without `--no-sandbox`; `browser.mjs` already passes it. If you ever override `extraArgs` from a custom script, keep the defaults in.
 
-**`Could not find a Chromium binary. Tried: ...`.** Nothing was found on PATH or at the known fallback paths. The error lists every candidate that was probed. Install Chromium (`pkg install chromium` on Termux, `apt install chromium` on Debian) or set `PLAYWRIGHT_CHROMIUM_BIN` to an explicit path.
+**`Could not find a Chromium binary. Tried: ...`.** Nothing was found on PATH or at the known fallback paths. The error lists every candidate that was probed. Install Chromium (`pkg install chromium` on Termux, `npx playwright-core install chromium` on Debian/other Linux — or just re-run `bash install.sh`) or set `PLAYWRIGHT_CHROMIUM_BIN` to an explicit path.
 
 **`PLAYWRIGHT_CHROMIUM_BIN is set to '...' but that path doesn't exist`.** The env override itself points at a missing file — fix the path or unset the var to fall back to auto-discovery.
 

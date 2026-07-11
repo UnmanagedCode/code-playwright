@@ -73,3 +73,20 @@ test('falls back to absolute path when nothing is on PATH', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('prefers the first absolute fallback over later ones (Playwright-managed download before Termux path)', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tpw-test-'));
+  const first = path.join(dir, 'first-fallback');
+  const second = path.join(dir, 'second-fallback');
+  writeFileSync(first, '');
+  writeFileSync(second, '');
+  try {
+    const result = resolveChromiumBin({
+      pathEnv: '/nonexistent',
+      absoluteFallbacks: [first, second],
+    });
+    assert.equal(result.path, first);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
