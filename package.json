@@ -6,7 +6,8 @@
   "scripts": {
     "snap": "node snap.mjs",
     "session": "node session.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "setup": "bash install.sh"
   },
   "dependencies": {
     "playwright-core": "^1.49.0"

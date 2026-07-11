@@ -1,7 +1,8 @@
-// Thin wrapper around playwright-core that launches the system Chromium
-// (Termux on Android, or a distro package like Debian's) instead of
-// Playwright's bundled binary (which doesn't ship for Android ARM, and
-// which we don't want to require a separate download of on any platform).
+// Thin wrapper around playwright-core that launches Chromium. On Termux
+// that's the system `chromium-browser` package (Playwright's own Chromium
+// builds aren't published for Android/ARM). On Debian/other Linux it's a
+// Playwright-managed Chromium download (`playwright-core install chromium`,
+// run by install.sh) resolved through `chromium.executablePath()`.
 // Use this from ad-hoc debug scripts so they don't all have to repeat the
 // executablePath / flags dance.
 //
@@ -22,9 +23,9 @@ import path from 'node:path';
 // --- Chromium discovery --------------------------------------------------
 //
 // Resolution order: PLAYWRIGHT_CHROMIUM_BIN env override, then a PATH scan
-// of well-known binary names, then a couple of platform-specific absolute
-// paths as a last resort (for contexts where PATH doesn't carry the usual
-// install location, e.g. some non-interactive Termux invocations).
+// of well-known binary names, then (non-Termux only) the path of a
+// Playwright-managed Chromium download (`chromium.executablePath()`, see
+// install.sh), then the Termux absolute fallback path as a last resort.
 
 // Termux sets PREFIX to something like /data/data/com.termux/files/usr on
 // every invocation; generic Linux never does. More robust than
@@ -78,14 +79,32 @@ export function resolveChromiumBin({
   return { path: null, tried };
 }
 
+// Where a Playwright-managed Chromium download would live, if install.sh
+// (or a manual `playwright-core install chromium`) has put one there.
+// Termux never uses this — it always uses the system chromium-browser
+// package instead — so callers should skip it there rather than relying on
+// this try/catch alone (Playwright's registry has no Android host entry).
+function resolvePlaywrightManagedPath() {
+  try {
+    const p = chromium.executablePath();
+    return typeof p === 'string' && p ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 export function findChromiumBin() {
+  const playwrightManaged = isTermux() ? null : resolvePlaywrightManagedPath();
   const { path: found, tried, overrideInvalid } = resolveChromiumBin({
     envOverride: process.env.PLAYWRIGHT_CHROMIUM_BIN,
     pathEnv: process.env.PATH ?? '',
+    absoluteFallbacks: [...(playwrightManaged ? [playwrightManaged] : []), TERMUX_ABS_PATH],
   });
   if (found) return found;
 
-  const installCmd = isTermux() ? 'pkg install chromium' : 'apt install chromium';
+  const installCmd = isTermux()
+    ? 'pkg install chromium'
+    : 'npx playwright-core install chromium (or bash install.sh)';
   if (overrideInvalid) {
     throw new Error(
       `PLAYWRIGHT_CHROMIUM_BIN is set to '${process.env.PLAYWRIGHT_CHROMIUM_BIN}' but that path doesn't exist.`,
@@ -100,7 +119,9 @@ export function findChromiumBin() {
 
 function requireExecutable(bin) {
   if (!existsSync(bin)) {
-    const installCmd = isTermux() ? 'pkg install chromium' : 'apt install chromium';
+    const installCmd = isTermux()
+      ? 'pkg install chromium'
+      : 'npx playwright-core install chromium (or bash install.sh)';
     throw new Error(
       `Chromium binary not found at ${bin}. Install with \`${installCmd}\` or set PLAYWRIGHT_CHROMIUM_BIN.`,
     );
