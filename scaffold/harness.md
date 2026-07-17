@@ -9,8 +9,8 @@ It can be as simple or as elaborate as this project's verification needs call fo
 Adapt all of the following to whatever project you're actually running in (its server entry point, port convention, and key screens) — don't copy these verbatim:
 
 1. The shared `code-playwright` harness is already available as a sibling project — import its browser-driving helpers directly (the next step gives the path).
-2. Add the harness wherever this project already keeps dev/verification/helper scripts. If it has no such place, create a sensibly-named directory for it (use your judgment based on this project's conventions — don't default to `debug/` or any other fixed name). The harness should:
-   - Import `withPage`, `bootServer`, and/or `withActivePage` from `../../code-playwright/browser.mjs` (adjust the relative path if the sibling repo lives elsewhere).
+2. Add the harness under `harness/playwright/`, unless this project already has an established home for dev/verification/helper scripts — put it there instead. The harness should:
+   - Import `withPage`, `bootServer`, and/or `withActivePage` from `../../../code-playwright/browser.mjs` — three `../` because `harness/playwright/` sits two levels below the projects root; the `../` count tracks how deep the harness file sits (adjust if you placed it elsewhere or the sibling repo lives elsewhere).
    - Boot this project's server via `bootServer({ cwd, entry, ... })`, honoring `process.env.PORT` in the project's own entry point if it doesn't already.
    - Navigate to the project's key screen(s) — whatever the most representative "does this app render" route is — and save a screenshot.
    - Tear the server down cleanly on exit (`bootServer`'s `close()` handles this).
