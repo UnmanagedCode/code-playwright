@@ -24,7 +24,7 @@ code-playwright/
 This repo ships a `conductor.plugin.json` so it can be installed as a [code-conductor](https://github.com) plugin. It's conventions-and-scaffold-only — no backend, frontend, or MCP server — so enabling it never starts a process:
 
 - **`visual-verification`** (project convention) — tells agents to test and visually verify UX changes via the harness before considering them done. Degrades gracefully: works whether or not a project-local wrapper exists yet.
-- **`harness-wrapper`** (project scaffold) — a one-time bootstrap directive for a new project's first agent to build a thin project-local wrapper (under `debug/`) over this shared harness.
+- **`harness-wrapper`** (project scaffold) — a one-time bootstrap directive for a new project's first agent to build a thin project-local wrapper (under `harness/playwright/`) over this shared harness.
 
 The two pair naturally — the scaffold builds the wrapper the convention then tells you to use — but each is independently selectable.
 
@@ -94,7 +94,7 @@ git clone git@github.com:UnmanagedCode/code-playwright.git ~/project/code-playwr
 ~/project/
 ├── code-playwright/    # this repo
 ├── my-webapp/                    # your project
-│   └── debug/
+│   └── harness/playwright/
 │       ├── boot-myapp.mjs        # optional thin wrapper for app-specific defaults
 │       └── snap.mjs              # optional app-specific CLI
 └── ...
@@ -103,8 +103,10 @@ git clone git@github.com:UnmanagedCode/code-playwright.git ~/project/code-playwr
 Then import directly:
 
 ```js
-import { withPage, bootServer } from '../../code-playwright/browser.mjs';
+import { withPage, bootServer } from '../../../code-playwright/browser.mjs';
 ```
+
+The number of `../` segments tracks the importer's depth below the projects root — three from `harness/playwright/`, fewer for a file that sits higher up.
 
 Because `playwright-core` is installed under `~/project/code-playwright/node_modules/`, Node's module resolution finds it relative to `browser.mjs` regardless of where the importer lives.
 
