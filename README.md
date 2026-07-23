@@ -317,3 +317,7 @@ import('./browser.mjs').then(({ resolveChromiumBin }) => {
 ## Why no Playwright test runner?
 
 This harness exists for *visual* verification — eyes on a screenshot, or interactive scripting — which a headless test runner doesn't help with. If a Playwright assertion is ever worth committing, fold it into your project's existing test setup rather than growing a second runner here. The `test/` directory is a narrow exception: it unit-tests the pure chromium-discovery logic (`resolveChromiumBin`) with `node --test`, not browser behavior — that stance is unchanged.
+
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later). Copyright © 2026 UnmanagedCode. See the [LICENSE](LICENSE) file for details.

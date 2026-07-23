@@ -2,6 +2,7 @@
   "name": "code-playwright",
   "private": true,
   "type": "module",
+  "license": "AGPL-3.0-or-later",
   "description": "Generic Playwright + system-Chromium harness — launch, snap, and boot child servers for visual UI debugging on Termux (Android) or Debian/generic Linux.",
   "scripts": {
     "snap": "node snap.mjs",
