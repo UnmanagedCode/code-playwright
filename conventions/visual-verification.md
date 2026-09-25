@@ -3,5 +3,5 @@
 Always test and visually verify UX changes before considering them done — don't rely on automated tests alone for UI, layout, or visual changes.
 
 - If this project already has a local visual-verification harness — check `harness/playwright/` first, else wherever its dev/helper scripts live — use it to capture a screenshot and confirm the change renders correctly.
-- If not, create one using the shared `code-playwright` utilities as a base — see its README, "Using from a sibling project" section, for how to import and wire it up.
+- If not, create one using the shared `code-playwright` utilities as a base — see `$CC_PROJECTS_ROOT/.plugins/code-playwright/README.md`, "Importing from another project", for how to import and wire it up.
 - Drive the actual golden path (and any obviously-affected edge cases) through the harness, not just a single static screenshot, when the change affects interaction or state.
