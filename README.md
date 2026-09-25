@@ -106,12 +106,13 @@ export const BROWSER = pathToFileURL(file).href;
 Then load the helpers wherever you need them. The examples below assume this pattern:
 
 ```js
+import { BROWSER } from './<your-resolver>.mjs';
 const { withPage, bootServer } = await import(BROWSER);
 ```
 
 `playwright-core` resolves from this plugin's own `node_modules/`, so the importing project doesn't need its own copy.
 
-Run the CLIs by the same path from your own worktree. `session.mjs` derives its default session name from your current working directory:
+Run the CLIs by the same path from your own worktree:
 
 ```bash
 node "$CC_PROJECTS_ROOT/.plugins/code-playwright/session.mjs" start

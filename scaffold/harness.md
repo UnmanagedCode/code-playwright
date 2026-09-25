@@ -13,7 +13,7 @@ Adapt all of the following to whatever project you're actually running in (its s
    - Boot this project's server via `bootServer({ cwd, entry, ... })`, honoring `process.env.PORT` in the project's own entry point if it doesn't already.
    - Navigate to the project's key screen(s) — whatever the most representative "does this app render" route is — and save a screenshot.
    - Tear the server down cleanly on exit (`bootServer`'s `close()` handles this).
-2. Follow the shared harness README's "Writing your own debug script" section for the exact shape of a minimal script.
+2. Follow that README's "Writing your own debug script" section for the exact shape of a minimal script.
 
 ## What NOT to do
 
