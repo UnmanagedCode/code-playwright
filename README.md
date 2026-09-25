@@ -70,8 +70,7 @@ If nothing is found, the error lists every candidate that was tried plus the ins
 ## Install
 
 ```bash
-cd ~/project/code-playwright
-bash install.sh
+bash install.sh   # from this repo's root
 ```
 
 `install.sh` is idempotent — safe to re-run after every `git pull` (a code-conductor Plugin Library invokes it automatically post-clone and post-pull). It:
@@ -82,33 +81,41 @@ bash install.sh
 
 Equivalently: `npm run setup`.
 
-## Using from a sibling project
+## Importing from another project
 
-This package is consumed via direct relative import — no submodule, no npm publish. Clone it as a sibling of your project:
+code-conductor installs this plugin at `$CC_PROJECTS_ROOT/.plugins/code-playwright/` and exports `CC_PROJECTS_ROOT` (the absolute projects root) into every worker it spawns. A shell that code-conductor didn't spawn won't have the variable, so export it yourself:
 
 ```bash
-git clone git@github.com:UnmanagedCode/code-playwright.git ~/project/code-playwright
+export CC_PROJECTS_ROOT=/path/to/projects-root
 ```
 
-```
-~/project/
-├── code-playwright/    # this repo
-├── my-webapp/                    # your project
-│   └── harness/playwright/
-│       ├── boot-myapp.mjs        # optional thin wrapper for app-specific defaults
-│       └── snap.mjs              # optional app-specific CLI
-└── ...
-```
-
-Then import directly:
+A static `import` can't take a computed path. Instead, put this resolver in one module of your harness:
 
 ```js
-import { withPage, bootServer } from '../../../code-playwright/browser.mjs';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const root = process.env.CC_PROJECTS_ROOT;
+if (!root) throw new Error('CC_PROJECTS_ROOT is not set: export the absolute projects root');
+const file = path.join(root, '.plugins', 'code-playwright', 'browser.mjs');
+if (!existsSync(file)) throw new Error(`code-playwright not found at ${file}`);
+export const BROWSER = pathToFileURL(file).href;
 ```
 
-The number of `../` segments tracks the importer's depth below the projects root — three from `harness/playwright/`, fewer for a file that sits higher up.
+Then load the helpers wherever you need them. The examples below assume this pattern:
 
-Because `playwright-core` is installed under `~/project/code-playwright/node_modules/`, Node's module resolution finds it relative to `browser.mjs` regardless of where the importer lives.
+```js
+const { withPage, bootServer } = await import(BROWSER);
+```
+
+`playwright-core` resolves from this plugin's own `node_modules/`, so the importing project doesn't need its own copy.
+
+Run the CLIs by the same path from your own worktree. `session.mjs` derives its default session name from your current working directory:
+
+```bash
+node "$CC_PROJECTS_ROOT/.plugins/code-playwright/session.mjs" start
+```
 
 ## Quick smoke test
 
@@ -127,7 +134,8 @@ Open `home.png` to confirm the page rendered. If you see a blank or chrome-error
 Wraps `playwright-core`'s `chromium.launch()` with an auto-discovered executable path (see [Prereqs](#prereqs)) and a set of launch flags (`--no-sandbox`, `--disable-dev-shm-usage`, etc.) that are safe on both Termux and Debian — see [Troubleshooting](#troubleshooting) for the per-flag rationale.
 
 ```js
-import { withPage, waitForServer } from '../../code-playwright/browser.mjs';
+// BROWSER: see "Importing from another project"
+const { withPage, waitForServer } = await import(BROWSER);
 
 await waitForServer('http://127.0.0.1:8787');
 await withPage(async (page) => {
@@ -143,7 +151,8 @@ await withPage(async (page) => {
 - `bootServer({ cwd, entry, port?, env?, sandbox?, silent? })` — spawns an arbitrary node server as a child process on a free ephemeral port (override with `port`), waits for it to bind, and returns `{ url, port, child, sandbox?, close() }`. Cleanup is wired to parent `exit` / `SIGINT` / `SIGTERM` so a Ctrl+C'd script never leaks a server.
 
 ```js
-import { bootServer, withPage } from '../../code-playwright/browser.mjs';
+// BROWSER: see "Importing from another project"
+const { bootServer, withPage } = await import(BROWSER);
 
 const srv = await bootServer({
   cwd: '/path/to/my-app',
@@ -252,7 +261,8 @@ node session.mjs stop
 ### Programmatic API
 
 ```js
-import { withActivePage } from '../../code-playwright/browser.mjs';
+// BROWSER: see "Importing from another project"
+const { withActivePage } = await import(BROWSER);
 
 await withActivePage(async (page, { context, browser }) => {
   await page.goto('https://example.com');
@@ -266,7 +276,8 @@ Lower-level helpers: `startSession`, `connectSession`, `readSessionMeta`, `isPid
 
 ```js
 // /tmp/check-foo.mjs
-import { withPage, waitForServer } from '../../code-playwright/browser.mjs';
+// BROWSER: see "Importing from another project"
+const { withPage, waitForServer } = await import(BROWSER);
 
 await waitForServer('http://127.0.0.1:8787');
 await withPage(async (page) => {

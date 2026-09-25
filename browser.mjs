@@ -6,7 +6,7 @@
 // Use this from ad-hoc debug scripts so they don't all have to repeat the
 // executablePath / flags dance.
 //
-//   import { withPage } from 'code-playwright/browser.mjs';   // or relative path
+//   const { withPage } = await import(BROWSER);   // BROWSER: see README, "Importing from another project"
 //   await withPage(async (page) => {
 //     await page.goto('http://127.0.0.1:8787');
 //     await page.screenshot({ path: 'screenshots/home.png' });
@@ -242,8 +242,8 @@ function sanitizeForName(s) {
 // distinct across separate runners (separate worktrees/checkouts), so
 // concurrent runners no longer collide on a shared literal 'default'.
 //
-// IMPORTANT: this harness is consumed by other projects via relative import
-// (`../../code-playwright/browser.mjs`), so the walk MUST start
+// IMPORTANT: this harness is imported by other projects running in their own
+// worktrees (see README, "Importing from another project"), so the walk MUST start
 // from `process.cwd()` — the invoking runner's directory — and never from
 // this file's own location (`import.meta.url` / `__dirname`). Anchoring on
 // the harness's own file path would collapse every consumer back onto one
