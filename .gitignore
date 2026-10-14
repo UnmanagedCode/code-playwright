@@ -4,3 +4,4 @@ screenshots/
 *.jpg
 *.jpeg
 *.webp
+package-lock.json
